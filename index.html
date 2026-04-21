@@ -320,7 +320,8 @@
       color: var(--gold);
     }
 
-    #prompt-input {
+    #prompt-input,
+    #sloppyfy-input {
       width: 100%;
       background: #0a0505;
       color: #fff;
@@ -331,14 +332,35 @@
       font-size: 1rem;
       line-height: 1.5;
       resize: vertical;
-      min-height: 6rem;
       transition: border-color 0.2s;
     }
 
-    #prompt-input:focus {
+    #prompt-input { min-height: 6rem; }
+    #sloppyfy-input { min-height: 4rem; }
+
+    #prompt-input:focus,
+    #sloppyfy-input:focus {
       outline: none;
       border-color: var(--gold);
     }
+
+    .sloppyfy {
+      align-self: flex-end;
+      background: linear-gradient(135deg, var(--gold) 0%, #ffd866 100%);
+      color: var(--text-dark);
+      border: none;
+      border-radius: 8px;
+      padding: 0.55rem 1.1rem;
+      font-weight: 800;
+      font-size: 0.85rem;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      cursor: pointer;
+      transition: transform 0.1s, filter 0.2s;
+      box-shadow: 0 4px 12px rgba(245, 197, 66, 0.25);
+    }
+    .sloppyfy:hover { filter: brightness(1.1); }
+    .sloppyfy:active { transform: scale(0.96); }
 
     .reroll {
       background: transparent;
@@ -534,6 +556,11 @@
           <pre id="command" class="command"></pre>
           <button class="copy" id="copy">Copy</button>
         </div>
+
+        <label class="result-label" for="sloppyfy-input">Sloppyfy your prompt</label>
+        <textarea id="sloppyfy-input" rows="2" spellcheck="false"
+          placeholder="Type a boring prompt (e.g. build a calculator)…"></textarea>
+        <button class="sloppyfy" id="sloppyfy">Sloppyfy ✨</button>
       </div>
     </section>
 
@@ -737,11 +764,25 @@
       const thing = pick(SILLY.things);
       const twist = pick(SILLY.twists);
       const midEmoji = pick(SILLY.midEmojis);
-      const reqs = pickN(SILLY.requirements, rand(1, 2)).join(", and");
+      const reqs = pickN(SILLY.requirements, rand(1, 2)).join(", and ");
       const closer = pick(SILLY.closers);
       const tags = pickN(SILLY.hashtags, rand(2, 3)).join(" ");
 
       return `${opens} ${intensifier} ${verb} a ${adjs} ${thing} ${twist} ${midEmoji} — also ${reqs}!!! ${closer} ${tags}`;
+    }
+
+    // Wrap a user-supplied prompt in slop without replacing its core idea.
+    function sloppyfyText(text) {
+      const cleaned = text.trim().replace(/[.!?]+$/, "");
+      const opens = pickN(SILLY.openEmojis, rand(2, 3)).join("");
+      const intensifier = pick(SILLY.intensifiers);
+      const adjs = pickN(SILLY.adjectives, rand(1, 2)).join(", ");
+      const midEmoji = pick(SILLY.midEmojis);
+      const reqs = pickN(SILLY.requirements, rand(1, 2)).join(", and ");
+      const closer = pick(SILLY.closers);
+      const tags = pickN(SILLY.hashtags, rand(2, 3)).join(" ");
+
+      return `${opens} ${intensifier} ${cleaned} (but make it ${adjs}) ${midEmoji} — also ${reqs}!!! ${closer} ${tags}`;
     }
 
     // === Agent CLI templates ===
@@ -779,6 +820,8 @@
     const chipsEl = document.getElementById("chips");
     const commandEl = document.getElementById("command");
     const copyBtn = document.getElementById("copy");
+    const sloppyfyInput = document.getElementById("sloppyfy-input");
+    const sloppyfyBtn = document.getElementById("sloppyfy");
     const toastEl = document.getElementById("toast");
 
     function init() {
@@ -834,7 +877,7 @@
       }
     }
 
-    async function pull() {
+    async function pull(promptOverride = null) {
       if (spinning) return;
       spinning = true;
       lever.classList.add("pulled");
@@ -854,7 +897,7 @@
       displayText.textContent = `${fe.name}  +  ${be.name}  +  ${ag.name}`;
       reelsContainer.classList.add("win");
 
-      promptInput.value = makeSillyPrompt();
+      promptInput.value = promptOverride ?? makeSillyPrompt();
       renderChips();
       updateCommand();
       resultEl.classList.remove("hidden");
@@ -875,8 +918,20 @@
     });
     copyBtn.addEventListener("click", copyCommand);
 
-    lever.addEventListener("click", pull);
+    sloppyfyBtn.addEventListener("click", () => {
+      const raw = sloppyfyInput.value.trim();
+      if (!raw) {
+        showToast("Type something boring first");
+        sloppyfyInput.focus();
+        return;
+      }
+      pull(sloppyfyText(raw));
+    });
+
+    lever.addEventListener("click", () => pull());
     window.addEventListener("keydown", (e) => {
+      const t = e.target;
+      if (t && (t.tagName === "TEXTAREA" || t.tagName === "INPUT" || t.isContentEditable)) return;
       if (e.code === "Space" || e.code === "Enter") {
         e.preventDefault();
         pull();
